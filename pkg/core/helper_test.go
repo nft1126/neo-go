@@ -46,6 +46,12 @@ func newTestChain(t *testing.T) *Blockchain {
 }
 
 func newTestChainWithCustomCfg(t *testing.T, f func(*config.Config)) *Blockchain {
+	chain := initTestChain(t, f)
+	go chain.Run()
+	return chain
+}
+
+func initTestChain(t *testing.T, f func(*config.Config)) *Blockchain {
 	unitTestNetCfg, err := config.Load("../../config", testchain.Network())
 	require.NoError(t, err)
 	if f != nil {
@@ -53,7 +59,6 @@ func newTestChainWithCustomCfg(t *testing.T, f func(*config.Config)) *Blockchain
 	}
 	chain, err := NewBlockchain(storage.NewMemoryStore(), unitTestNetCfg.ProtocolConfiguration, zaptest.NewLogger(t))
 	require.NoError(t, err)
-	go chain.Run()
 	return chain
 }
 

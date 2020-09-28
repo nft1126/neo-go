@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/big"
 	"strings"
+	"sync/atomic"
 
 	"github.com/nspcc-dev/neo-go/pkg/core/dao"
 	"github.com/nspcc-dev/neo-go/pkg/core/interop"
@@ -19,6 +20,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/crypto/hash"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
 	"github.com/nspcc-dev/neo-go/pkg/io"
+	"github.com/nspcc-dev/neo-go/pkg/oracle/interfaces"
 	"github.com/nspcc-dev/neo-go/pkg/smartcontract"
 	"github.com/nspcc-dev/neo-go/pkg/smartcontract/manifest"
 	"github.com/nspcc-dev/neo-go/pkg/util"
@@ -35,6 +37,11 @@ type Oracle struct {
 	NEO *NEO
 
 	Desig *Designate
+
+	// Module is an oracle module capable of talking with the external world.
+	Module atomic.Value
+	// newRequests contains new requests created during current block.
+	newRequests map[uint64]*state.OracleRequest
 }
 
 const (
@@ -112,6 +119,7 @@ func newOracle() *Oracle {
 	o.AddEvent("OracleResponse", manifest.NewParameter("Id", smartcontract.IntegerType),
 		manifest.NewParameter("OriginalTx", smartcontract.Hash256Type))
 
+	o.newRequests = make(map[uint64]*state.OracleRequest)
 	return o
 }
 
@@ -125,6 +133,9 @@ func (o *Oracle) PostPersist(ic *interop.Context) error {
 	var nodes keys.PublicKeys
 	var reward []big.Int
 	single := new(big.Int).SetUint64(oracleRequestPrice)
+	var removedIDs []uint64
+
+	orc, _ := o.Module.Load().(interfaces.Oracle)
 	for _, tx := range ic.Block.Transactions {
 		resp := getResponse(tx)
 		if resp == nil {
@@ -137,6 +148,9 @@ func (o *Oracle) PostPersist(ic *interop.Context) error {
 		}
 		if err := ic.DAO.DeleteStorageItem(o.ContractID, reqKey); err != nil {
 			return err
+		}
+		if orc != nil {
+			removedIDs = append(removedIDs, resp.ID)
 		}
 
 		idKey := makeIDListKey(req.URL)
@@ -175,7 +189,11 @@ func (o *Oracle) PostPersist(ic *interop.Context) error {
 	for i := range reward {
 		o.GAS.mint(ic, nodes[i].GetScriptHash(), &reward[i], false)
 	}
-	return nil
+
+	if len(removedIDs) != 0 && orc != nil {
+		orc.RemoveRequests(removedIDs)
+	}
+	return o.updateCache(ic.DAO)
 }
 
 // Metadata returns contract metadata.
@@ -343,6 +361,7 @@ func (o *Oracle) PutRequestInternal(id uint64, req *state.OracleRequest, d dao.D
 	if err := d.PutStorageItem(o.ContractID, reqKey, reqItem); err != nil {
 		return err
 	}
+	o.newRequests[id] = req
 
 	// Add request ID to the id list.
 	lst := new(IDList)
@@ -398,6 +417,29 @@ func (o *Oracle) getOriginalTxID(d dao.DAO, tx *transaction.Transaction) util.Ui
 	return tx.Hash()
 }
 
+// getRequests returns all requests which have not been finished yet.
+func (o *Oracle) getRequests(d dao.DAO) (map[uint64]*state.OracleRequest, error) {
+	m, err := d.GetStorageItemsWithPrefix(o.ContractID, prefixRequest)
+	if err != nil {
+		return nil, err
+	}
+	reqs := make(map[uint64]*state.OracleRequest, len(m))
+	for k, si := range m {
+		if len(k) != 8 {
+			return nil, errors.New("invalid request ID")
+		}
+		r := io.NewBinReaderFromBuf(si.Value)
+		req := new(state.OracleRequest)
+		req.DecodeBinary(r)
+		if r.Err != nil {
+			return nil, r.Err
+		}
+		id := binary.LittleEndian.Uint64([]byte(k))
+		reqs[id] = req
+	}
+	return reqs, nil
+}
+
 func makeRequestKey(id uint64) []byte {
 	k := make([]byte, 9)
 	k[0] = prefixRequest[0]
@@ -411,4 +453,29 @@ func makeIDListKey(url string) []byte {
 
 func (o *Oracle) getSerializableFromDAO(d dao.DAO, key []byte, item io.Serializable) error {
 	return getSerializableFromDAO(o.ContractID, d, key, item)
+}
+
+// updateCache updates cached Oracle values if they've been changed
+func (o *Oracle) updateCache(d dao.DAO) error {
+	orc, _ := o.Module.Load().(interfaces.Oracle)
+	if orc == nil {
+		return nil
+	}
+
+	pubs, err := o.GetOracleNodes(d)
+	if err != nil {
+		return err
+	}
+	orc.UpdateOracleNodes(pubs)
+
+	reqs := o.newRequests
+	o.newRequests = make(map[uint64]*state.OracleRequest)
+	for id := range reqs {
+		key := makeRequestKey(id)
+		if si := d.GetStorageItem(o.ContractID, key); si == nil { // tx has failed
+			delete(reqs, id)
+		}
+	}
+	orc.AddRequests(reqs)
+	return nil
 }

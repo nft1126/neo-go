@@ -23,6 +23,26 @@ func (o *Oracle) RemoveRequests(ids []uint64) {
 
 // AddRequests saves all requests in-fly for further processing.
 func (o *Oracle) AddRequests(reqs map[uint64]*state.OracleRequest) {
+	if len(reqs) == 0 {
+		return
+	}
+
+	select {
+	case o.requestMap <- reqs:
+	default:
+		select {
+		case old := <-o.requestMap:
+			for id, r := range old {
+				reqs[id] = r
+			}
+		default:
+		}
+		o.requestMap <- reqs
+	}
+}
+
+// ProcessRequestsInternal processes provided requests synchronously.
+func (o *Oracle) ProcessRequestsInternal(reqs map[uint64]*state.OracleRequest) {
 	acc := o.getAccount()
 	if acc == nil {
 		return
@@ -99,11 +119,15 @@ func (o *Oracle) processRequest(priv *keys.PrivateKey, id uint64, req *state.Ora
 	incTx.addResponse(priv.PublicKey(), backupSig, true)
 
 	readyTx, ready := incTx.finalize(o.getOracleNodes())
+	if ready {
+		ready = !incTx.isSent
+		incTx.isSent = true
+	}
 	incTx.Unlock()
 
 	o.getBroadcaster().SendResponse(priv, resp, txSig)
 	if ready {
-		o.OnTransaction(readyTx)
+		o.getOnTransaction()(readyTx)
 	}
 	return nil
 }

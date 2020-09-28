@@ -24,6 +24,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/io"
 	"github.com/nspcc-dev/neo-go/pkg/network/capability"
 	"github.com/nspcc-dev/neo-go/pkg/network/payload"
+	"github.com/nspcc-dev/neo-go/pkg/oracle/interfaces"
 	"github.com/nspcc-dev/neo-go/pkg/smartcontract/trigger"
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm"
@@ -278,7 +279,9 @@ func (chain testChain) ManagementContractHash() util.Uint160 {
 func (chain *testChain) PoolTx(tx *transaction.Transaction, _ ...*mempool.Pool) error {
 	return chain.poolTx(tx)
 }
-
+func (chain testChain) SetOracle(interfaces.Oracle) {
+	panic("TODO")
+}
 func (chain *testChain) SubscribeForBlocks(ch chan<- *block.Block) {
 	chain.blocksCh = append(chain.blocksCh, ch)
 }
