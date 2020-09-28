@@ -18,6 +18,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/io"
 	"github.com/nspcc-dev/neo-go/pkg/network/capability"
 	"github.com/nspcc-dev/neo-go/pkg/network/payload"
+	"github.com/nspcc-dev/neo-go/pkg/oracle/interfaces"
 	"github.com/nspcc-dev/neo-go/pkg/smartcontract/trigger"
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm"
@@ -167,7 +168,9 @@ func (chain testChain) GetUtilityTokenBalance(uint160 util.Uint160) *big.Int {
 func (chain testChain) PoolTx(*transaction.Transaction, ...*mempool.Pool) error {
 	panic("TODO")
 }
-
+func (chain testChain) SetOracle(interfaces.Oracle) {
+	panic("TODO")
+}
 func (chain testChain) SubscribeForBlocks(ch chan<- *block.Block) {
 	panic("TODO")
 }

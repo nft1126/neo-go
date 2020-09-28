@@ -148,6 +148,7 @@ func initBCWithMetrics(cfg config.Config, log *zap.Logger) (*core.Blockchain, *m
 	if err != nil {
 		return nil, nil, nil, cli.NewExitError(err, 1)
 	}
+
 	configureAddresses(&cfg.ApplicationConfiguration)
 	prometheus := metrics.NewPrometheusService(cfg.ApplicationConfiguration.Prometheus, log)
 	pprof := metrics.NewPprofService(cfg.ApplicationConfiguration.Pprof, log)
@@ -330,7 +331,7 @@ func startServer(ctx *cli.Context) error {
 	if err != nil {
 		return cli.NewExitError(fmt.Errorf("failed to create network server: %w", err), 1)
 	}
-	rpcServer := server.New(chain, cfg.ApplicationConfiguration.RPC, serv, log)
+	rpcServer := server.New(chain, cfg.ApplicationConfiguration.RPC, serv, serv.GetOracle(), log)
 	errChan := make(chan error)
 
 	go serv.Start(errChan)

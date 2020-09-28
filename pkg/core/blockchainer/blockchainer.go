@@ -10,6 +10,7 @@ import (
 	"github.com/nspcc-dev/neo-go/pkg/core/transaction"
 	"github.com/nspcc-dev/neo-go/pkg/crypto"
 	"github.com/nspcc-dev/neo-go/pkg/crypto/keys"
+	"github.com/nspcc-dev/neo-go/pkg/oracle/interfaces"
 	"github.com/nspcc-dev/neo-go/pkg/smartcontract/trigger"
 	"github.com/nspcc-dev/neo-go/pkg/util"
 	"github.com/nspcc-dev/neo-go/pkg/vm"
@@ -52,6 +53,7 @@ type Blockchainer interface {
 	GetStorageItems(id int32) (map[string]*state.StorageItem, error)
 	GetTestVM(tx *transaction.Transaction, b *block.Block) *vm.VM
 	GetTransaction(util.Uint256) (*transaction.Transaction, uint32, error)
+	SetOracle(interfaces.Oracle)
 	mempool.Feer // fee interface
 	GetMaxBlockSize() uint32
 	GetMaxBlockSystemFee() int64
