@@ -8,4 +8,6 @@ import (
 // Broadcaster broadcasts oracle responses.
 type Broadcaster interface {
 	SendResponse(priv *keys.PrivateKey, resp *transaction.OracleResponse, txSig []byte)
+	Run()
+	Shutdown()
 }
