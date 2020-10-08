@@ -139,6 +139,7 @@ func NewOracle(cfg Config) (*Oracle, error) {
 // Shutdown shutdowns Oracle.
 func (o *Oracle) Shutdown() {
 	close(o.close)
+	o.getBroadcaster().Shutdown()
 }
 
 // Run runs must be executed in a separate goroutine.
@@ -184,9 +185,17 @@ func (o *Oracle) getBroadcaster() interfaces.Broadcaster {
 func (o *Oracle) SetBroadcaster(b interfaces.Broadcaster) {
 	o.mtx.Lock()
 	defer o.mtx.Unlock()
+	o.ResponseHandler.Shutdown()
 	o.ResponseHandler = b
+	go b.Run()
 }
 
 // SendResponse implements Broadcaster interface.
 func (defaultResponseHandler) SendResponse(*keys.PrivateKey, *transaction.OracleResponse, []byte) {
 }
+
+// Run implements Broadcaster interface.
+func (defaultResponseHandler) Run() {}
+
+// Shutdown implements Broadcaster interface.
+func (defaultResponseHandler) Shutdown() {}
