@@ -32,11 +32,11 @@ func init() {
 	oracleInvoc = w.Bytes()
 }
 
-func (o *Oracle) getResponse(reqID uint64) *incompleteTx {
+func (o *Oracle) getResponse(reqID uint64, create bool) *incompleteTx {
 	o.respMtx.Lock()
 	defer o.respMtx.Unlock()
 	incTx, ok := o.responses[reqID]
-	if !ok {
+	if !ok && create && !o.removed[reqID] {
 		incTx = newIncompleteTx()
 		o.responses[reqID] = incTx
 	}
@@ -46,7 +46,10 @@ func (o *Oracle) getResponse(reqID uint64) *incompleteTx {
 // AddResponse processes oracle response from node pub.
 // sig is response transaction signature.
 func (o *Oracle) AddResponse(pub *keys.PublicKey, reqID uint64, txSig []byte) {
-	incTx := o.getResponse(reqID)
+	incTx := o.getResponse(reqID, true)
+	if incTx == nil {
+		return
+	}
 
 	incTx.Lock()
 	isBackup := false
@@ -64,7 +67,7 @@ func (o *Oracle) AddResponse(pub *keys.PublicKey, reqID uint64, txSig []byte) {
 		}
 	}
 	incTx.addResponse(pub, txSig, isBackup)
-	readyTx, ready := incTx.finalize(o.getOracleNodes())
+	readyTx, ready := incTx.finalize(o.getOracleNodes(), false)
 	if ready {
 		ready = !incTx.isSent
 		incTx.isSent = true
@@ -165,4 +168,11 @@ func isVerifyOk(v *vm.VM) bool {
 	}
 	ok, err := v.Estack().Pop().Item().TryBool()
 	return err == nil && ok
+}
+
+func getFailedResponse(id uint64) *transaction.OracleResponse {
+	return &transaction.OracleResponse{
+		ID:   id,
+		Code: transaction.Error,
+	}
 }

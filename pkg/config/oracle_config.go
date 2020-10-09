@@ -6,6 +6,7 @@ import "time"
 type OracleConfiguration struct {
 	Enabled               bool          `yaml:"Enabled"`
 	Nodes                 []string      `yaml:"Nodes"`
+	MaxTaskTimeout        time.Duration `yaml:"MaxTaskTimeout"`
 	MaxConcurrentRequests int           `yaml:"MaxConcurrentRequests"`
 	RequestTimeout        time.Duration `yaml:"RequestTimeout"`
 	ResponseTimeout       time.Duration `yaml:"ResponseTimeout"`

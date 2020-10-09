@@ -43,6 +43,8 @@ type (
 		// respMtx protects responses map.
 		respMtx   sync.RWMutex
 		responses map[uint64]*incompleteTx
+		// removed contains ids of requests which won't be processed further due to expiration.
+		removed map[uint64]bool
 
 		wallet *wallet.Wallet
 	}
@@ -82,6 +84,9 @@ const (
 
 	// defaultRequestTimeout is default request timeout.
 	defaultRequestTimeout = time.Second * 5
+
+	// defaultMaxTaskTimeout is default timeout for the failed request to be reprocessed.
+	defaultMaxTaskTimeout = time.Minute * 3
 )
 
 // NewOracle returns new oracle instance.
@@ -92,6 +97,7 @@ func NewOracle(cfg Config) (*Oracle, error) {
 		close:      make(chan struct{}),
 		requestMap: make(chan map[uint64]*state.OracleRequest, 1),
 		responses:  make(map[uint64]*incompleteTx),
+		removed:    make(map[uint64]bool),
 	}
 	o.oracleHash = hash.Hash160(o.OracleScript)
 	if o.MainCfg.RequestTimeout == 0 {
@@ -101,6 +107,9 @@ func NewOracle(cfg Config) (*Oracle, error) {
 		o.MainCfg.MaxConcurrentRequests = defaultMaxConcurrentRequests
 	}
 	o.requestCh = make(chan request, o.MainCfg.MaxConcurrentRequests)
+	if o.MainCfg.MaxTaskTimeout == 0 {
+		o.MainCfg.MaxTaskTimeout = defaultMaxTaskTimeout
+	}
 
 	var err error
 	w := cfg.MainCfg.UnlockWallet
@@ -148,10 +157,36 @@ func (o *Oracle) Run() {
 	for i := 0; i < o.MainCfg.MaxConcurrentRequests; i++ {
 		go o.runRequestWorker()
 	}
+
+	tick := time.NewTicker(o.MainCfg.MaxTaskTimeout / 2)
 	for {
 		select {
 		case <-o.close:
+			tick.Stop()
 			return
+		case <-tick.C:
+			var reprocess []uint64
+			o.respMtx.RLock()
+			o.removed = make(map[uint64]bool)
+			for id, incTx := range o.responses {
+				incTx.RLock()
+				if incTx.isSent || time.Since(incTx.time) > o.MainCfg.MaxTaskTimeout {
+					if incTx.attempts <= 1 { // reprocess first time
+						reprocess = append(reprocess, id)
+					} else {
+						o.removed[id] = true
+					}
+				}
+				incTx.RUnlock()
+			}
+			for id := range o.removed {
+				delete(o.responses, id)
+			}
+			o.respMtx.Unlock()
+
+			for _, id := range reprocess {
+				o.requestCh <- request{ID: id}
+			}
 		case reqs := <-o.requestMap:
 			for id, req := range reqs {
 				o.requestCh <- request{
