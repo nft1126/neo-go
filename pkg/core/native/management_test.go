@@ -5,6 +5,7 @@ import (
 
 	"github.com/nspcc-dev/neo-go/pkg/config/netmode"
 	"github.com/nspcc-dev/neo-go/pkg/core/dao"
+	"github.com/nspcc-dev/neo-go/pkg/core/interop"
 	"github.com/nspcc-dev/neo-go/pkg/core/state"
 	"github.com/nspcc-dev/neo-go/pkg/core/storage"
 	"github.com/nspcc-dev/neo-go/pkg/smartcontract/manifest"
@@ -60,4 +61,20 @@ func TestDeployGetUpdateDestroyContract(t *testing.T) {
 	require.NoError(t, err)
 	_, err = mgmt.GetContract(d, h)
 	require.Error(t, err)
+}
+
+func TestManagement_Initialize(t *testing.T) {
+	t.Run("good", func(t *testing.T) {
+		d := dao.NewSimple(storage.NewMemoryStore(), netmode.UnitTestNet, false)
+		ic := &interop.Context{DAO: dao.NewCached(d)}
+		mgmt := newManagement()
+		require.NoError(t, mgmt.Initialize(ic))
+	})
+	t.Run("invalid contract state", func(t *testing.T) {
+		d := dao.NewSimple(storage.NewMemoryStore(), netmode.UnitTestNet, false)
+		ic := &interop.Context{DAO: dao.NewCached(d)}
+		mgmt := newManagement()
+		require.NoError(t, ic.DAO.PutStorageItem(mgmt.ContractID, []byte{prefixContract}, &state.StorageItem{Value: []byte{0xFF}}))
+		require.Error(t, mgmt.Initialize(ic))
+	})
 }
