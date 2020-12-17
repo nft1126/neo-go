@@ -101,6 +101,7 @@ func (m *Management) GetContract(d dao.DAO, hash util.Uint160) (*state.Contract,
 	m.mtx.RLock()
 	cs, ok := m.contracts[hash]
 	m.mtx.RUnlock()
+	fmt.Println("trying to get contract", hash.StringLE(), ok, cs != nil)
 	if !ok {
 		return nil, storage.ErrKeyNotFound
 	} else if cs != nil {
