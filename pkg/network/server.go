@@ -989,7 +989,7 @@ func (s *Server) relayBlocksLoop() {
 			msg := NewMessage(CMDInv, payload.NewInventory(payload.BlockType, []util.Uint256{b.Hash()}))
 			// Filter out nodes that are more current (avoid spamming the network
 			// during initial sync).
-			s.iteratePeersWithSendMsg(msg, Peer.EnqueuePacket, func(p Peer) bool {
+			s.iteratePeersWithSendMsg(msg, Peer.EnqueueHPPacket, func(p Peer) bool {
 				return p.Handshaked() && p.LastBlockIndex() < b.Index
 			})
 		}
