@@ -200,7 +200,7 @@ func (s *Server) Start(errChan chan error) {
 		zap.Uint32("headerHeight", s.chain.HeaderHeight()))
 
 	s.tryStartConsensus()
-	s.initStaleMemPools()
+	//	s.initStaleMemPools()
 
 	go s.broadcastTxLoop()
 	go s.relayBlocksLoop()
@@ -1078,7 +1078,6 @@ func (s *Server) broadcastTxLoop() {
 		if timer != nil {
 			timer.Stop()
 		}
-		timer = time.NewTimer(batchTime)
 	}
 
 	for {
@@ -1098,9 +1097,9 @@ func (s *Server) broadcastTxLoop() {
 				broadcast()
 			}
 		case tx := <-s.transactions:
-			//			if len(txs) == 0 {
-			//				timer = time.NewTimer(batchTime)
-			//			}
+			if len(txs) == 0 {
+				timer = time.NewTimer(batchTime)
+			}
 
 			txs = append(txs, tx.Hash())
 			if len(txs) == batchSize {
