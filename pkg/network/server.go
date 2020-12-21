@@ -978,7 +978,7 @@ func (s *Server) broadcastHPMessage(msg *Message) {
 // relayBlocksLoop subscribes to new blocks in the ledger and broadcasts them
 // to the network. Intended to be run as a separate goroutine.
 func (s *Server) relayBlocksLoop() {
-	ch := make(chan *block.Block, 2) // Some buffering to smooth out possible egressing delays.
+	ch := make(chan *block.Block, 10) // Some buffering to smooth out possible egressing delays.
 	s.chain.SubscribeForBlocks(ch)
 	for {
 		select {
