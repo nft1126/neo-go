@@ -1025,10 +1025,12 @@ func (s *Server) RelayTxn(t *transaction.Transaction) RelayReason {
 
 // broadcastTX broadcasts an inventory message about new transaction.
 func (s *Server) broadcastTX(t *transaction.Transaction, _ interface{}) {
-	select {
-	case s.transactions <- t:
-	case <-s.quit:
-	}
+	s.broadcastTxHashes([]util.Uint256{t.Hash()})
+	//
+	//	select {
+	//	case s.transactions <- t:
+	//	case <-s.quit:
+	//	}
 }
 
 func (s *Server) broadcastTxHashes(hs []util.Uint256) {
