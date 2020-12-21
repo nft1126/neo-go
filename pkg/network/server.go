@@ -1078,6 +1078,7 @@ func (s *Server) broadcastTxLoop() {
 		if timer != nil {
 			timer.Stop()
 		}
+		timer = time.NewTimer(batchTime)
 	}
 
 	for {
@@ -1097,9 +1098,9 @@ func (s *Server) broadcastTxLoop() {
 				broadcast()
 			}
 		case tx := <-s.transactions:
-			if len(txs) == 0 {
-				timer = time.NewTimer(batchTime)
-			}
+			//			if len(txs) == 0 {
+			//				timer = time.NewTimer(batchTime)
+			//			}
 
 			txs = append(txs, tx.Hash())
 			if len(txs) == batchSize {
