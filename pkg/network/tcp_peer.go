@@ -443,7 +443,11 @@ func (p *TCPPeer) SendPing(msg *Message) error {
 		})
 	}
 	p.lock.Unlock()
-	return p.EnqueueMessage(msg)
+	pkt, err := msg.Bytes()
+	if err != nil {
+		return err
+	}
+	return p.EnqueueHPPacket(true, pkt)
 }
 
 // HandlePing handles a ping message received from the peer.
