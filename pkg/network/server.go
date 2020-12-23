@@ -517,7 +517,11 @@ func (s *Server) handlePing(p Peer, ping *payload.Ping) error {
 			return err
 		}
 	}
-	return p.EnqueueP2PMessage(NewMessage(CMDPong, payload.NewPing(s.chain.BlockHeight(), s.id)))
+	pkt, err := NewMessage(CMDPong, payload.NewPing(s.chain.BlockHeight(), s.id)).Bytes()
+	if err != nil {
+		return err
+	}
+	return p.EnqueueHPPacket(true, pkt)
 }
 
 // handlePing processes pong request.
