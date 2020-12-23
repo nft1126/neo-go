@@ -79,6 +79,8 @@ type (
 		quit       chan struct{}
 
 		transactions chan *transaction.Transaction
+		txMtx        sync.Mutex
+		txSlice      []util.Uint256
 
 		consensusStarted *atomic.Bool
 
@@ -1060,6 +1062,10 @@ func (s *Server) broadcastTX(t *transaction.Transaction, _ interface{}) {
 	select {
 	case s.transactions <- t:
 	case <-s.quit:
+	default:
+		s.txMtx.Lock()
+		s.txSlice = append(s.txSlice, t.Hash())
+		s.txMtx.Unlock()
 	}
 }
 
@@ -1094,6 +1100,7 @@ func (s *Server) broadcastTxLoop() {
 		batchSize = 32
 	)
 
+	batch := make([]util.Uint256, 0, batchSize)
 	txs := make([]util.Uint256, 0, batchSize)
 	var timer *time.Timer
 
@@ -1105,10 +1112,16 @@ func (s *Server) broadcastTxLoop() {
 	}
 
 	broadcast := func() {
-		s.broadcastTxHashes(txs)
+		for i := 0; i < len(txs); i += batchSize {
+			batch = batch[:batchSize]
+			sz := copy(batch, txs[i:])
+			batch = batch[:sz]
+			s.broadcastTxHashes(batch)
+		}
 		txs = txs[:0]
 		if timer != nil {
 			timer.Stop()
+			timer = nil
 		}
 	}
 
@@ -1134,7 +1147,19 @@ func (s *Server) broadcastTxLoop() {
 			}
 
 			txs = append(txs, tx.Hash())
-			if len(txs) == batchSize {
+			l := len(s.transactions)
+			for i := 0; i < l; i++ {
+				tx := <-s.transactions
+				txs = append(txs, tx.Hash())
+			}
+			if l >= cap(s.transactions)-1 {
+				s.txMtx.Lock()
+				txs = append(txs, s.txSlice...)
+				s.txSlice = s.txSlice[:0]
+				s.txMtx.Unlock()
+			}
+
+			if len(txs) >= batchSize {
 				broadcast()
 			}
 		}
