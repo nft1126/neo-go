@@ -228,6 +228,7 @@ func (p *TCPPeer) handleQueues() {
 			case msg = <-p.sendQ:
 			}
 		}
+		_ = p.conn.SetWriteDeadline(time.Now().Add(time.Second * 5))
 		_, err = p.conn.Write(msg)
 		if err != nil {
 			break
