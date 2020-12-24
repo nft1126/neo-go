@@ -687,7 +687,28 @@ func (bc *Blockchain) storeBlock(block *block.Block, txpool *mempool.Pool) error
 	}
 	writeBuf.Reset()
 
-	root := bc.dao.MPT.StateRoot()
+	if bc.config.SaveStorageBatch {
+		bc.lastBatch = cache.DAO.GetBatch()
+	}
+	if bc.config.RemoveUntraceableBlocks {
+		if block.Index > bc.config.MaxTraceableBlocks {
+			index := block.Index - bc.config.MaxTraceableBlocks // is at least 1
+			err := cache.DeleteBlock(bc.headerHashes[index], writeBuf)
+			if err != nil {
+				bc.log.Warn("error while removing old block",
+					zap.Uint32("index", index),
+					zap.Error(err))
+			}
+			writeBuf.Reset()
+		}
+	}
+
+	d := cache.DAO.(*dao.Simple)
+	if err := d.UpdateMPT(); err != nil {
+		return fmt.Errorf("error while trying to apply MPT changes: %w", err)
+	}
+
+	root := d.MPT.StateRoot()
 	var prevHash util.Uint256
 	if block.Index > 0 {
 		prev, err := bc.dao.GetStateRoot(block.Index - 1)
@@ -707,28 +728,13 @@ func (bc *Blockchain) storeBlock(block *block.Block, txpool *mempool.Pool) error
 		return err
 	}
 
-	if bc.config.SaveStorageBatch {
-		bc.lastBatch = cache.DAO.GetBatch()
-	}
-	if bc.config.RemoveUntraceableBlocks {
-		if block.Index > bc.config.MaxTraceableBlocks {
-			index := block.Index - bc.config.MaxTraceableBlocks // is at least 1
-			err := cache.DeleteBlock(bc.headerHashes[index], writeBuf)
-			if err != nil {
-				bc.log.Warn("error while removing old block",
-					zap.Uint32("index", index),
-					zap.Error(err))
-			}
-			writeBuf.Reset()
-		}
-	}
-
 	bc.lock.Lock()
 	_, err = cache.Persist()
 	if err != nil {
 		bc.lock.Unlock()
 		return err
 	}
+
 	bc.dao.MPT.Flush()
 	// Every persist cycle we also compact our in-memory MPT.
 	persistedHeight := atomic.LoadUint32(&bc.persistedHeight)
