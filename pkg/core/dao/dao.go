@@ -382,11 +382,6 @@ func (dao *Simple) PutStorageItem(id int32, key []byte, si *state.StorageItem) e
 		return buf.Err
 	}
 	v := buf.Bytes()
-	if dao.MPT != nil {
-		if err := dao.MPT.Put(stKey[1:], v); err != nil && err != mpt.ErrNotFound {
-			return err
-		}
-	}
 	return dao.Store.Put(stKey, v)
 }
 
@@ -394,11 +389,6 @@ func (dao *Simple) PutStorageItem(id int32, key []byte, si *state.StorageItem) e
 // given key from the store.
 func (dao *Simple) DeleteStorageItem(id int32, key []byte) error {
 	stKey := makeStorageItemKey(id, key)
-	if dao.MPT != nil {
-		if err := dao.MPT.Delete(stKey[1:]); err != nil && err != mpt.ErrNotFound {
-			return err
-		}
-	}
 	return dao.Store.Delete(stKey)
 }
 

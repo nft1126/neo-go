@@ -729,6 +729,27 @@ func (bc *Blockchain) storeBlock(block *block.Block, txpool *mempool.Pool) error
 		bc.lock.Unlock()
 		return err
 	}
+	mb := bc.dao.Store.GetBatch()
+	for i := range mb.Put {
+		if mb.Put[i].Key[0] == byte(storage.STStorage) {
+			err = bc.dao.MPT.Put(mb.Put[i].Key[1:], mb.Put[i].Value)
+			if err != nil {
+				break
+			}
+		}
+	}
+	for i := range mb.Deleted {
+		if mb.Deleted[i].Key[0] == byte(storage.STStorage) {
+			err = bc.dao.MPT.Delete(mb.Deleted[i].Key[1:])
+			if err != nil {
+				break
+			}
+		}
+	}
+	if err != nil {
+		return fmt.Errorf("error while trying to apply MPT changes: %w", err)
+	}
+	bc.dao.Store.Persist()
 	bc.dao.MPT.Flush()
 	// Every persist cycle we also compact our in-memory MPT.
 	persistedHeight := atomic.LoadUint32(&bc.persistedHeight)
