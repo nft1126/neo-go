@@ -1,6 +1,7 @@
 package mpt
 
 import (
+	"math/rand"
 	"testing"
 
 	"github.com/nspcc-dev/neo-go/internal/random"
@@ -425,6 +426,32 @@ func testTrieDelete(t *testing.T, enableGC bool) {
 			})
 		})
 	})
+}
+
+func BenchmarkTrie_Memory(b *testing.B) {
+	// This is a rather specific benchmark for a common case of modifying storage of a small number of contracts.
+	// Trie stores contract data with key containing contract hash.
+	// Thus we don't change first 20 bytes of key.
+	tr := NewTrie(new(HashNode), false, newTestStore())
+	const contractNumber = 3
+	keys := make([][]byte, contractNumber)
+	for i := range keys {
+		keys[i] = make([]byte, 25)
+		rand.Read(keys[i])
+	}
+
+	value := make([]byte, 10)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for j := range keys {
+			rand.Read(keys[j][20:])
+			rand.Read(value)
+			if err := tr.Put(keys[j], value); err != nil {
+				b.FailNow()
+			}
+		}
+	}
 }
 
 func TestTrie_PanicInvalidRoot(t *testing.T) {
